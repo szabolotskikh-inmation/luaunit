@@ -1291,6 +1291,83 @@ TestLuaUnitAssertions = { __class__ = 'TestLuaUnitAssertions' }
         assertFailure( lu.assertEquals, {[{"one"}]=1,[{"one"}]=1}, {[{"one"}]=1} )
     end
 
+    function TestLuaUnitAssertions:test_assertEqualsTableWithMetatable__eq()
+        local next_fn = function(t, key)
+            local k, v = next(t, key)
+            while k ~= nil and k:sub(1, 1) == "_" do
+                k, v = next(t, k)
+            end
+            return k, v
+        end
+        local mt = {
+            __eq = function(t1, t2)
+                if t1._id == nil or t2._id == nil then
+                    return false
+                end
+                return t1._id == t2._id
+            end,
+            __pairs = function(t)
+                return next_fn, t
+            end
+        }
+        local mt_no_eq = {
+            __pairs = mt.__pairs
+        }
+        do
+            local obj1 = setmetatable({_id=1, name="A"}, mt)
+            local obj2 = setmetatable({_id=2, name="A"}, mt)
+            lu.assertNotEquals(obj1, obj2)
+            lu.assertNotEquals(obj1, {name="A"})
+            lu.assertNotEquals({name="A"}, obj1)
+
+            local obj1_second = setmetatable({_id=1, name="Changed"}, mt)
+            lu.assertEquals(obj1, obj1_second)
+
+            setmetatable(obj1, mt_no_eq)
+            lu.assertNotEquals(obj1, obj2)
+            lu.assertNotEquals(obj2, obj1)
+            lu.assertEquals(obj1, {name="A"})
+            lu.assertEquals({name="A"}, obj1)
+            setmetatable(obj2, mt_no_eq)
+            lu.assertEquals(obj1, obj2)
+        end
+
+        do -- now "empty" objects
+            local obj1 = setmetatable({_id=1}, mt)
+            local obj2 = setmetatable({_id=2}, mt)
+            lu.assertNotEquals(obj1, obj2)
+            lu.assertNotEquals(obj1, {})
+            lu.assertNotEquals({}, obj1)
+
+            local obj1_second = setmetatable({_id=1}, mt)
+            lu.assertEquals(obj1, obj1_second)
+
+            setmetatable(obj1, mt_no_eq)
+            lu.assertNotEquals(obj1, obj2)
+            lu.assertNotEquals(obj2, obj1)
+            lu.assertEquals(obj1, {})
+            lu.assertEquals({}, obj1)
+            setmetatable(obj2, mt_no_eq)
+            lu.assertEquals(obj1, obj2)
+        end
+
+        do -- and completely empty objects
+            local obj1 = setmetatable({}, mt)
+            local obj2 = setmetatable({}, mt)
+            lu.assertNotEquals(obj1, obj2)
+            lu.assertNotEquals(obj1, {})
+            lu.assertNotEquals({}, obj1)
+
+            setmetatable(obj1, mt_no_eq)
+            lu.assertNotEquals(obj1, obj2)
+            lu.assertNotEquals(obj2, obj1)
+            lu.assertEquals(obj1, {})
+            lu.assertEquals({}, obj1)
+            setmetatable(obj2, mt_no_eq)
+            lu.assertEquals(obj1, obj2)
+        end
+    end
+
     function TestLuaUnitAssertions:test_assertAlmostEquals()
         lu.assertAlmostEquals( 1, 1, 0.1 )
         lu.assertAlmostEquals( 1, 1 ) -- default margin (= M.EPS)
