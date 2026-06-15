@@ -29,7 +29,6 @@ M.PRINT_TABLE_REF_IN_ERROR_MSG = false
 M.LINE_LENGTH = 80
 M.TABLE_DIFF_ANALYSIS_THRESHOLD = 10    -- display deep analysis for more than 10 items
 M.LIST_DIFF_ANALYSIS_THRESHOLD  = 10    -- display deep analysis for more than 10 items
-M.RESPECT_METATABLE_EQUALS = true
 
 -- this setting allow to remove entries from the stack-trace, for 
 -- example to hide a call to a framework which would be calling luaunit
@@ -1232,6 +1231,13 @@ local _recursion_cache_MT = {
     }
 }
 
+local function _get_mt_eq(t)
+    local mt = getmetatable(t)
+    if mt then
+        return mt.__eq
+    end
+end
+
 local function _is_table_equals(actual, expected, cycleDetectTable, marginForAlmostEqual)
     --[[Returns true if both table are equal.
 
@@ -1260,21 +1266,15 @@ local function _is_table_equals(actual, expected, cycleDetectTable, marginForAlm
         return actual == expected
     end
 
-    if M.RESPECT_METATABLE_EQUALS then
-        if actual == expected then
-           return true
-        end
-        local mt_actual = getmetatable(actual)
-        if mt_actual ~= nil and mt_actual.__eq ~= nil then
-            return false
-        else
-            local mt_expected = getmetatable(expected)
-            if mt_expected ~= nil and mt_expected.__eq ~= nil then
-                return false
-            end
-        end
+    -- Note: one cannot reliably check here because __eq method can be present but inaccessible in Lua.
+    local is_ok, mt_eq_fn = pcall(_get_mt_eq, actual)
+    if not (is_ok and mt_eq_fn) then
+        is_ok, mt_eq_fn = pcall(_get_mt_eq, expected)
     end
- 
+    if is_ok and mt_eq_fn then
+        -- The order of aruments is independent from the source of __eq function, the same as in luaV_equalobj.
+        return mt_eq_fn(actual, expected)
+    end
 
     cycleDetectTable = cycleDetectTable or { actual={}, expected={} }
     if cycleDetectTable.actual[ actual ] then

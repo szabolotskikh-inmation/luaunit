@@ -1301,6 +1301,8 @@ TestLuaUnitAssertions = { __class__ = 'TestLuaUnitAssertions' }
         end
         local mt = {
             __eq = function(t1, t2)
+                -- Note: We deliberately don't check whether the objects t1 and t2 are of the same type (e.g., cheching it's metatable),
+                --       in order to test that the __eq method is taken from the first or the second object, if the first object does not have it.
                 if t1._id == nil or t2._id == nil then
                     return false
                 end
@@ -1365,6 +1367,74 @@ TestLuaUnitAssertions = { __class__ = 'TestLuaUnitAssertions' }
             lu.assertEquals({}, obj1)
             setmetatable(obj2, mt_no_eq)
             lu.assertEquals(obj1, obj2)
+        end
+
+        do -- nested tables with metatables
+            local objA10 = {name="A", nested=setmetatable({_id=10, p="a"}, mt)}
+            local objA11 = {name="A", nested=setmetatable({_id=11, p="a"}, mt)}
+            lu.assertNotEquals(objA10, objA11)
+            lu.assertNotEquals(objA11, objA10)
+
+            -- compare with the table without __eq method.
+            lu.assertEquals   (objA10, {name="A", nested={_id=10, p="a"}})
+            lu.assertNotEquals(objA10, {name="A", nested={        p="a"}})
+
+            lu.assertEquals({name="A", nested={_id=10, p="a"}}, objA10)
+            lu.assertNotEquals({name="A", nested={        p="a"}}, objA10)
+
+            local objA10_second = {name="A", nested=setmetatable({_id=10, p="b"}, mt)}
+            lu.assertEquals(objA10, objA10_second)
+            lu.assertEquals(objA10_second, objA10)
+
+            local objB10 = {name="B", nested=setmetatable({_id=10, p="a"}, mt)}
+            lu.assertNotEquals(objA10, objB10)
+            lu.assertNotEquals(objB10, objA10)
+
+            -- one of the objects does not have __eq method.
+            setmetatable(objA10.nested, mt_no_eq)
+
+            lu.assertNotEquals(objA10, objA11)
+            lu.assertNotEquals(objA11, objA10)
+
+            lu.assertEquals(objA10, objA10_second)
+            lu.assertEquals(objA10_second, objA10)
+
+            lu.assertNotEquals(objA10, objB10)
+            lu.assertNotEquals(objB10, objA10)
+
+            -- compare with the object without __eq method.
+            lu.assertEquals(objA10, {name="A", nested={p="a"}})
+            lu.assertEquals({name="A", nested={p="a"}}, objA10)
+        end
+    end
+
+    function TestLuaUnitAssertions:test_assertEqualsTableWithProtectedMetatable()
+        do -- expected BUG in luaunit: the result should be lu.assertEquals(t1, t2).
+            local mt ={ __metatable = "protected metatable", __eq = function() return true end }
+            local t1 = setmetatable({name="A"}, mt)
+            local t2 = setmetatable({name="B"}, mt)
+            -- BUG
+            lu.assertNotEquals(t1, t2)
+        end
+
+        do -- expected BUG in luaunit: the result should be lu.assertNotEquals(t1, t2).
+            local mt ={ __metatable = "protected metatable", __eq = function() return false end }
+            local t1 = setmetatable({}, mt)
+            local t2 = setmetatable({}, mt)
+            lu.assertEquals(t1, t2)
+        end
+        do
+            local mt ={ __metatable = 123, __eq = function() return false end }
+            local t1 = setmetatable({}, mt)
+            local t2 = setmetatable({}, mt)
+            lu.assertEquals(t1, t2)
+        end
+
+        do
+            local mt ={ __metatable = "protected metatable", __eq = function() return false end }
+            local t1 = setmetatable({name="A"}, mt)
+            local t2 = setmetatable({name="A"}, mt)
+            lu.assertEquals(t1, t2)
         end
     end
 
